@@ -2,23 +2,20 @@
 class Board
 {
 public:
-	int board[6]; // 6 tile
-	int dir; // 4 direction
-	bool state; // before : 0 | after : 1
-	Board() : board({0 ,0 ,0 ,0 ,0 ,0}), state(1) {}
-	int getindex(int next_tile = 0)
+	int board[6];
+	Board() : board({0 ,0 ,0 ,0 ,0 ,0}) {}
+	int getindex(int next_tile, int dir = 4)
 	{
 		int index = 0;
-		if(state) 
-		{
-			index = 4;
-			index += next_tile;
-		}
+		index = dir;
 		for(int i = 0 ; i < 6 ; i++)
 		{
 			index <<= 4;
 			index += board[i];
 		}
+		index <<= 2;
+		index += next_tile;
+		return index;
 	}
 	bool slide_up()
 	{
@@ -44,6 +41,26 @@ public:
 		}
 		return move;
 	}
+	bool slide(int dir)
+	{
+		bool move;
+		if(!dir) return slide_up();
+		if(dir == 1)
+		{
+			reflect();
+			move = slide_left();
+			reflect();
+			return move;
+		}
+		if(dir == 2)
+		{
+			reverse();
+			move = slide_up();
+			reverse();
+			return move;
+		}
+		return slide_left();
+	}
 	void reflect()
 	{
 		std::swap(board[0], board[2]);
@@ -55,72 +72,155 @@ public:
 		std::swap(board[1], board[4]);
 		std::swap(board[2], board[5]);
 	}
-}
+};
 class State
 {
 public:
 	int min, max;
 	float avg;
-	State() : avg(-1) {}
-}state[1<<27]; // 1(before/after) + 2(next_tile) + 4 * 6(tile)
-int after_state(Board &board, int dir, int tile, bool bag[3])
+	State() {}
+	State(int a, float b, int c) : min(a), avg(b), max(c) {}
+};
+std::map <int, State> state;
+void P(Board board)
+{
+	printf("%d %d %d\n%d %d %d\n\n", board.board[0], board.board[1], board.board[2], board.board[3], board.board[4], board.board[5]);
+}
+int before_state(Board &board, bool bag[3], int next_tile);
+int test(Board &board, int next_tile , int dir = 4)
 {
 	Board tmp = board;
-	if(state[board.getindex(tile)].avg != -1) return board.getindex(tile);
+	if(state.find(board.getindex(next_tile, dir)) != state.end()) return board.getindex(next_tile, dir);
 	tmp.reflect();
-	if(state[tmp.getindex(tile)].avg != -1) return tmp.getindex(tile);
+	if(state.find(tmp.getindex(next_tile, dir)) != state.end()) return tmp.getindex(next_tile, dir);
 	tmp.reverse();
-	if(state[tmp.getindex(tile)].avg != -1) return tmp.getindex(tile);
+	if(state.find(tmp.getindex(next_tile, dir)) != state.end()) return tmp.getindex(next_tile, dir);
 	tmp.reflect();
-	if(state[tmp.getindex(tile)].avg != -1) return tmp.getindex(tile);
-	State &s = state[board.getindex()];
-	float sum  = 0;
-	int count = 0, index;
-	s.min = 1000000;
-	s.max = 0;
-	tmp.state = 0;
-	if(!dir) int loc[] = {3, 4, 5};
-	else if(dir == 1) int loc[] = {0, 3};
-	else if(dir == 2) int loc[] = {0, 1, 2};
-	else int loc[] = {2, 5};
-	for(int i = 0 ; i < (sizeof(loc) >> 2) ; i++)
+	if(state.find(tmp.getindex(next_tile, dir)) != state.end()) return tmp.getindex(next_tile, dir);
+	return -1;
+}
+int after_state(Board &board, int dir, int next_tile, bool bag[3])
+{
+	//P(board);
+	int index = test(board, next_tile, dir);
+	if(index != -1) return index;
+	Board tmp = board;
+	int count = 0, min, max;
+	float sum = 0;
+	std::vector <int> v;
+	min = 1000000;
+	max = 0;
+	v.clear();
+	if(!dir) {v.push_back(3);v.push_back(4);v.push_back(5);}
+	else if(dir == 1) {v.push_back(0);v.push_back(3);}
+	else if(dir == 2) {v.push_back(0);v.push_back(1);v.push_back(2);}
+	else {v.push_back(2);v.push_back(5);}
+	bag[next_tile] = 0;
+	for(int i = 0 ; i < v.size() ; i++)
 	{
-		if(tmp.board[loc[i]]) continue;
+		if(tmp.board[v[i]]) continue;
+		tmp.board[v[i]] = next_tile;
+		if(!bag[0] && !bag[1] && !bag[2]) bag[0] = bag[1] = bag[2] = 1;
 		for(int j = 0 ; j < 3 ; j++)
 		{
 			if(!bag[j]) continue;
-			tmp.board[loc[i]] = j;
-			bag[j] = 0;
-			index = before_state(tmp, bag);
-			s.max = std::max(s.max, state[index].max);
-			s.min = std::min(s.min, state[index].min);
-			count ++;
+			index = before_state(tmp, bag, j+1);
+			max = std::max(max, state[index].max);
+			min = std::min(min, state[index].min);
 			sum += state[index].avg;
-			tmp.board[loc[i]] = 0;
-			bag[j] = 1;
+			count ++;
 		}
+		if(bag[0] && bag[1] && bag[2]) bag[0] = bag[1] = bag[2] = 0;
+		tmp.board[v[i]] = 0;
 	}
-	s.avg = sum / count;
-	return board.getindex();
+	bag[next_tile] = 1;
+	index = board.getindex(next_tile, dir);
+	state[index] = State(min, sum / count, max);
+	return index;
 }
-int before_state(Board &board, bool bag[3])
+int before_state(Board &board, bool bag[3], int next_tile)
 {
-	Board tmp = board;
-	if(state[board.getindex()].avg != -1) return board.getindex();
-	tmp.reflect();
-	if(state[tmp.getindex()].avg != -1) return tmp.getindex();
-	tmp.reverse();
-	if(state[tmp.getindex()].avg != -1) return tmp.getindex();
-	tmp.reflect();
-	if(state[tmp.getindex()].avg != -1) return tmp.getindex();
-	tmp = board;
-
+	//P(board);
+	int index = test(board, next_tile);
+	if(index != -1) return index;
+	Board tmp;
+	float avg = 0;
+	int count = 0, min, max;
+	min = 0;
+	max = 0;
+	for(int i = 0 ; i < 4 ; i++)
+	{
+		tmp = board;
+		if(!tmp.slide(i)) continue;
+		index = after_state(tmp, i, next_tile, bag);
+		max = std::max(max, state[index].max);
+		min = std::max(min, state[index].min);
+		avg = std::max(avg, state[index].avg);
+		count ++;
+	}
+	if(!count)
+	{
+		for(int i = 0 ; i < 6 ; i++) if(board.board[i] > 2) count += pow(3, board.board[i]-2);
+		max = min = count;
+		avg = count;
+		P(board);
+	}
+	index = board.getindex(next_tile);
+	state[index] = State(min, avg, max); 
+	return index;
 }
 int main()
 {
-	after_state(Board(), 0, {1, 1, 1});
-	after_state(Board(), 1, {1, 1, 1});
-	after_state(Board(), 2, {1, 1, 1});
-	after_state(Board(), 3, {1, 1, 1});
+	Board board;
+	state.clear();
+	bool bag[3] = {1, 1, 1};
+	for(int i = 0 ; i < 6 ; i++)
+	{
+		for(int j = 0 ; j < 3 ; j++)
+		{
+			board.board[i] = j + 1;
+			bag[j] = 0;
+			for(int k = 0 ; k < 3 ; k++) if(bag[k]) before_state(board, bag, k+1);
+			bag[j] = 1;
+			board.board[i] = 0;
+		}
+	}
+	char c;
+	int next_tile;
+	while(scanf(" %c", &c) != EOF)
+	{
+		for(int i = 0 ; i < 6 ; i++) scanf("%d", &board.board[i]);
+		scanf(" +%d", &next_tile);
+		printf("%c ", c);
+		for(int i = 0 ; i < 6 ; i++) printf("%d ", board.board[i]);
+		printf("+%d = ", next_tile);
+		for(int i = 0 ; i < 6 ; i++)
+		{
+			if(board.board[i] < 4) continue;
+			board.board[i] = log2(board.board[i] / 3) + 3;
+		}
+		if(c == 'a')
+		{
+			bool y = 1;
+			int index;
+			for(int i = 0 ; i < 4 ; i++)
+			{
+				index = test(board, next_tile, i);
+				if(state.find(index) != state.end())
+				{
+					printf("%d %f %d\n", state[index].min, state[index].avg, state[index].max);
+					y = 0;
+					break;
+				}
+			}
+			if(y) printf("-1\n");
+		}
+		else
+		{
+			int index = test(board, next_tile);
+			if(state.find(index) != state.end()) printf("%d %f %d\n", state[index].min, state[index].avg, state[index].max);
+			else printf("-1\n");
+		}
+	}
 	return 0;
 }
