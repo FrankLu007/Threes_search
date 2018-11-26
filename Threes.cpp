@@ -92,18 +92,23 @@ int test(Board &board, int next_tile , int dir = 4)
 	Board tmp = board;
 	if(state.find(board.getindex(next_tile, dir)) != state.end()) return board.getindex(next_tile, dir);
 	tmp.reflect();
+	if(dir == 1 || dir == 3) dir = 4 - dir;
 	if(state.find(tmp.getindex(next_tile, dir)) != state.end()) return tmp.getindex(next_tile, dir);
 	tmp.reverse();
+	if(!dir || dir == 2) dir = 2 - dir;
 	if(state.find(tmp.getindex(next_tile, dir)) != state.end()) return tmp.getindex(next_tile, dir);
 	tmp.reflect();
+	if(dir == 1 || dir == 3) dir = 4 - dir;
 	if(state.find(tmp.getindex(next_tile, dir)) != state.end()) return tmp.getindex(next_tile, dir);
 	return -1;
 }
 int after_state(Board &board, int dir, int next_tile, bool bag[3])
 {
+	//printf("a\n");
 	//P(board);
 	int index = test(board, next_tile, dir);
 	if(index != -1) return index;
+	//if(state.find(board.getindex(next_tile, dir)) != state.end()) return board.getindex(next_tile, dir);
 	Board tmp = board;
 	int count = 0, min, max;
 	float sum = 0;
@@ -115,7 +120,7 @@ int after_state(Board &board, int dir, int next_tile, bool bag[3])
 	else if(dir == 1) {v.push_back(0);v.push_back(3);}
 	else if(dir == 2) {v.push_back(0);v.push_back(1);v.push_back(2);}
 	else {v.push_back(2);v.push_back(5);}
-	bag[next_tile] = 0;
+	bag[next_tile-1] = 0;
 	for(int i = 0 ; i < v.size() ; i++)
 	{
 		if(tmp.board[v[i]]) continue;
@@ -133,16 +138,18 @@ int after_state(Board &board, int dir, int next_tile, bool bag[3])
 		if(bag[0] && bag[1] && bag[2]) bag[0] = bag[1] = bag[2] = 0;
 		tmp.board[v[i]] = 0;
 	}
-	bag[next_tile] = 1;
+	bag[next_tile-1] = 1;
 	index = board.getindex(next_tile, dir);
 	state[index] = State(min, sum / count, max);
 	return index;
 }
 int before_state(Board &board, bool bag[3], int next_tile)
 {
+	//printf("b\n");
 	//P(board);
-	int index = test(board, next_tile);
+	int index = test(board, next_tile), best = -1;
 	if(index != -1) return index;
+	//if(state.find(board.getindex(next_tile)) != state.end()) return board.getindex(next_tile);
 	Board tmp;
 	float avg = 0;
 	int count = 0, min, max;
@@ -153,9 +160,10 @@ int before_state(Board &board, bool bag[3], int next_tile)
 		tmp = board;
 		if(!tmp.slide(i)) continue;
 		index = after_state(tmp, i, next_tile, bag);
-		max = std::max(max, state[index].max);
-		min = std::max(min, state[index].min);
-		avg = std::max(avg, state[index].avg);
+		//max = std::max(max, state[index].max);
+		//min = std::max(min, state[index].min);
+		if(best == -1 || state[index].avg > state[best].avg) best = index;
+		//avg = std::max(avg, state[index].avg);
 		count ++;
 	}
 	if(!count)
@@ -163,7 +171,13 @@ int before_state(Board &board, bool bag[3], int next_tile)
 		for(int i = 0 ; i < 6 ; i++) if(board.board[i] > 2) count += pow(3, board.board[i]-2);
 		max = min = count;
 		avg = count;
-		P(board);
+		//return 1/0;
+	}
+	else
+	{
+		min = state[best].min;
+		max = state[best].max;
+		avg = state[best].avg;
 	}
 	index = board.getindex(next_tile);
 	state[index] = State(min, avg, max); 
